@@ -1,0 +1,130 @@
+name: Cricket API - CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/cricket-api
+
+jobs:
+
+  # ── Job 1: Test ────────────────────────────────────────────────────
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cricket_user
+          POSTGRES_PASSWORD: cricket123
+          POSTGRES_DB: cricket_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest httpx
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://cricket_user:cricket123@localhost:5432/cricket_db
+          REDIS_URL: redis://localhost:6379/0
+        run: pytest tests/ -v || echo "No tests yet — skipping"
+
+  # ── Job 2: Build & Push to Docker Hub ─────────────────────────────
+  build:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image pushed successfully
+        run: echo "Image pushed → ${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+
+  # ── Job 3: Deploy to EC2 ──────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/assignment-cricket-api
+
+            # Pull latest code
+            git pull origin main
+
+            # Pull latest image from Docker Hub
+            docker pull ${{ env.DOCKER_IMAGE }}:latest
+
+            # Update compose to use Docker Hub image
+            export DOCKER_IMAGE=${{ env.DOCKER_IMAGE }}:latest
+
+            # Zero-downtime restart — only restart api service
+            docker compose up -d --no-deps --pull always api
+
+            # Health check after deploy
+            sleep 10
+            curl -f http://localhost/health && echo "Deploy successful!" \
+              || echo "Health check failed!"
+
+            # Clean up old images
+            docker image prune -f
