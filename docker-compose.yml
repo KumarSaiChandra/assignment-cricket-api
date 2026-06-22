@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+
+  # ── Your FastAPI app ────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: cricket_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://cricket_user:cricket123@postgres:5432/cricket_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cricket_postgres
+    environment:
+      POSTGRES_USER: cricket_user
+      POSTGRES_PASSWORD: cricket123
+      POSTGRES_DB: cricket_db
+    ports:
+      - "5433:5432"    # 5433 on laptop → avoids conflict with your local postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cricket_user -d cricket_db"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis ───────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: cricket_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+    restart: unless-stopped
+
+# ── Named volume (data persists even if container stops) ─────────────
+volumes:
+  postgres_data:
