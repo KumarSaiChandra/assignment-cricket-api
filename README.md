@@ -5,10 +5,7 @@ NGINX, PostgreSQL, Redis, and automated CI/CD via GitHub Actions.
 
 ## Architecture
 
-Internet → NGINX (80/443) → FastAPI (8000)
-↓         ↓
-PostgreSQL    Redis
-(internal)  (internal)
+![Architecture Diagram](cricket_api_architecture.png)
 
 GitHub Push → Actions CI/CD → Docker Hub → EC2 Deploy
 
