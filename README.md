@@ -157,21 +157,24 @@ REDIS_URL=redis://redis:6379/0
 
 ## Project Structure
 
+```
 assignment-cricket-api/
 ├── app/
-│   ├── database.py      # SQLAlchemy async engine
-│   ├── models.py        # DB table definitions
-│   └── schemas.py       # Pydantic request/response models
+│   ├── database.py          # SQLAlchemy engine + session
+│   ├── models.py            # DB table definitions
+│   └── schemas.py           # Pydantic request/response models
 ├── nginx/
-│   ├── nginx.conf       # Reverse proxy + rate limiting + SSL
-│   └── certs/           # SSL certificates (gitignored)
+│   ├── nginx.conf           # Reverse proxy + rate limiting + SSL
+│   └── certs/               # SSL certificates (gitignored)
 ├── scripts/
-│   └── backup.sh        # PostgreSQL backup with rotation
+│   └── backup.sh            # PostgreSQL backup with rotation
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml   # CI/CD pipeline
-├── main.py              # FastAPI app + all endpoints
-├── Dockerfile           # Multi-stage production image
-├── docker-compose.yml   # All services configuration
-└── requirements.txt
-
+│       └── deploy.yml       # CI/CD pipeline
+├── main.py                  # FastAPI app + all endpoints
+├── Dockerfile               # Multi-stage production image
+├── docker-compose.yml       # All services configuration
+├── requirements.txt
+├── .env.example             # Environment variable template
+└── README.md
+```
